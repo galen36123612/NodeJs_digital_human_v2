@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+/*import { useRef, useState } from "react";
 
 import Wave from "./Wave";
 import { Microphone } from "@phosphor-icons/react";
@@ -83,4 +83,197 @@ export default function MicrophoneInput({
       <Wave play={play} />
     </button>
   );
+}*/
+
+/*modify from this line*/
+import { useRef, useState, useEffect } from "react";
+import Wave from "./Wave";
+import { Microphone } from "@phosphor-icons/react";
+
+export enum MicrophoneStatus {
+  Listening,
+  stopListening,
+  NotSupported,
+  NoPermission,
+  Error
+}
+
+interface MicrophoneInputProps {
+  talking: boolean;
+  contentChange?: (content: string) => void;
+  onSubmit?: (content: string) => void;
+  onStopPlay?: () => void;
+  onStatusChange?: (status: MicrophoneStatus) => void;
+}
+
+// 檢查瀏覽器支持
+const checkSpeechRecognitionSupport = () => {
+  return !!(
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition ||
+    window.mozSpeechRecognition ||
+    window.msSpeechRecognition
+  );
+};
+
+// 獲取 SpeechRecognition 實例
+const getSpeechRecognition = () => {
+  return window.SpeechRecognition ||
+    window.webkitSpeechRecognition ||
+    window.mozSpeechRecognition ||
+    window.msSpeechRecognition;
+};
+
+export default function MicrophoneInput({
+  talking = false,
+  contentChange,
+  onSubmit,
+  onStopPlay,
+  onStatusChange
+}: MicrophoneInputProps) {
+  const firstflag = useRef(true);
+  const recognition = useRef<any>();
+  const [play, setPlay] = useState<boolean>(false);
+  const [isSupported, setIsSupported] = useState<boolean>(true);
+  const [errorMessage, setErrorMessage] = useState<string>("");
+
+  // 檢查瀏覽器支持
+  useEffect(() => {
+    const supported = checkSpeechRecognitionSupport();
+    setIsSupported(supported);
+    if (!supported) {
+      setErrorMessage("您的瀏覽器不支持語音識別功能");
+      onStatusChange?.(MicrophoneStatus.NotSupported);
+    }
+  }, []);
+
+  const handlerStop = () => {
+    if (recognition.current) {
+      recognition.current.stop();
+    }
+    setPlay(false);
+    onStopPlay?.();
+  };
+
+  const startPlay = async () => {
+    if (play) return;
+    
+    // 檢查麥克風權限
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop()); // 立即停止流，我們只是檢查權限
+    } catch (err) {
+      setErrorMessage("無法訪問麥克風，請檢查權限設置");
+      onStatusChange?.(MicrophoneStatus.NoPermission);
+      return;
+    }
+
+    const SpeechRecognition = getSpeechRecognition();
+    if (!SpeechRecognition) {
+      setErrorMessage("您的瀏覽器不支持語音識別功能");
+      onStatusChange?.(MicrophoneStatus.NotSupported);
+      return;
+    }
+
+    try {
+      recognition.current = new SpeechRecognition();
+      recognition.current.continuous = true;
+      recognition.current.lang = "zh-TW"; // 使用繁體中文
+      recognition.current.interimResults = true;
+      recognition.current.maxAlternatives = 1;
+
+      recognition.current.onresult = function (event: any) {
+        const results = event.results;
+        const item = results[results.length - 1];
+        
+        if (item) {
+          console.info(
+            "Result received: " + item[0].transcript + " ." + item[0].confidence
+          );
+          contentChange?.(item[0].transcript);
+          
+          if (item.isFinal) {
+            recognition.current?.stop();
+            onSubmit?.(item[0].transcript);
+          }
+        }
+      };
+
+      recognition.current.onstart = function () {
+        console.log("錄音開始");
+        setPlay(true);
+        onStatusChange?.(MicrophoneStatus.Listening);
+      };
+
+      recognition.current.onend = function () {
+        console.log("錄音結束");
+        setPlay(false);
+        onStatusChange?.(MicrophoneStatus.stopListening);
+      };
+
+      recognition.current.onerror = function (event: any) {
+        console.error("識別錯誤: ", event.error);
+        setErrorMessage(getErrorMessage(event.error));
+        onStatusChange?.(MicrophoneStatus.Error);
+        setPlay(false);
+      };
+
+      recognition.current.start();
+    } catch (err) {
+      console.error("初始化語音識別失敗:", err);
+      setErrorMessage("語音識別初始化失敗");
+      onStatusChange?.(MicrophoneStatus.Error);
+    }
+  };
+
+  // 錯誤訊息轉換
+  const getErrorMessage = (error: string) => {
+    switch (error) {
+      case 'network':
+        return '網絡錯誤';
+      case 'no-speech':
+        return '沒有檢測到語音';
+      case 'aborted':
+        return '錄音被中止';
+      case 'audio-capture':
+        return '無法捕獲音頻';
+      case 'not-allowed':
+        return '麥克風權限被拒絕';
+      default:
+        return '發生未知錯誤';
+    }
+  };
+
+  return (
+    <div className="w-full relative">
+      <button
+        className={`w-full p-1 flex flex-row justify-center items-center gap-4 overflow-hidden color-inherit subpixel-antialiased rounded-md backdrop-blur backdrop-saturate-150 ${
+          isSupported ? 'bg-default-100 bg-background/10' : 'bg-gray-500'
+        }`}
+        onClick={startPlay}
+        disabled={!isSupported || talking}
+      >
+        <Microphone 
+          fontSize={28} 
+          color={play ? "#1f94ea" : isSupported ? "white" : "#666"} 
+        />
+        <Wave play={play} />
+      </button>
+      {errorMessage && (
+        <div className="absolute top-full left-0 w-full mt-1 text-sm text-red-500 text-center">
+          {errorMessage}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// 為了 TypeScript 支持
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+    mozSpeechRecognition: any;
+    msSpeechRecognition: any;
+  }
 }
