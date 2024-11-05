@@ -27,7 +27,7 @@
 //}
 
 
-//Modify from this line 1105 新增訊息上下滾動功能
+//Modify from this line 1105_v2 新增訊息上下滾動功能
 
 import { Message } from "ai/react";
 import { useEffect, useRef, useState } from "react";
@@ -39,14 +39,14 @@ interface MessageListProps {
 
 export default function MessageList({ messages }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
+  // 平滑滾動到底部
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-    if (bottomRef.current) {
-      bottomRef.current.scrollIntoView({
-        behavior,
-        block: 'end',
+    if (containerRef.current) {
+      containerRef.current.scrollTo({
+        top: containerRef.current.scrollHeight,
+        behavior
       });
     }
   };
@@ -56,19 +56,19 @@ export default function MessageList({ messages }: MessageListProps) {
     if (!containerRef.current) return;
     
     const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-    // 如果用戶滾動到底部附近（允許 100px 的誤差），啟用自動滾動
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 100;
+    // 如果用戶滾動到底部附近（允許 30px 的誤差），啟用自動滾動
+    const isNearBottom = scrollHeight - scrollTop - clientHeight < 30;
     setAutoScroll(isNearBottom);
   };
 
-  // 當新消息到達時的滾動處理
+  // 當新消息到達時，如果啟用了自動滾動，則滾動到底部
   useEffect(() => {
     if (autoScroll) {
       scrollToBottom();
     }
-  }, [messages]);
+  }, [messages, autoScroll]);
 
-  // 組件掛載時滾動到底部
+  // 組件初始化時滾動到底部
   useEffect(() => {
     scrollToBottom('auto');
   }, []);
@@ -77,41 +77,38 @@ export default function MessageList({ messages }: MessageListProps) {
     <div 
       ref={containerRef}
       onScroll={handleScroll}
-      className="w-full h-full border-none flex flex-col gap-3 overflow-y-auto overscroll-contain px-4 md:px-6"
+      className="w-full h-[600px] flex flex-col gap-3 overflow-y-auto px-4 scroll-smooth"
       style={{
         scrollbarWidth: 'thin',
-        scrollbarColor: '#4B5563 transparent'
+        scrollbarColor: '#4B5563 transparent',
       }}
     >
-      {/* 頂部留白，提供更好的滾動體驗 */}
+      {/* 頂部留白 */}
       <div className="h-4" />
       
       {messages.map((message: Message) => (
         <div 
           key={message.id} 
-          className={`flex gap-2 md:gap-4 animate-fade-in ${
+          className={`flex gap-3 items-start animate-fade-in ${
             message.role === 'user' ? 'justify-end' : 'justify-start'
           }`}
         >
           {message.role === 'assistant' && (
-            <div className="w-6 h-6 md:w-8 md:h-8 shrink-0 rounded-full flex items-center justify-center bg-blue-500/80 backdrop-blur">
-              <Bot className="w-4 h-4 md:w-5 md:h-5 text-white" />
+            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-blue-500/80 backdrop-blur shrink-0">
+              <Bot className="w-5 h-5 text-white" />
             </div>
           )}
           
-          <div 
-            className={`flex flex-1 max-w-[85%] md:max-w-[75%] ${
-              message.role === 'user' ? 'justify-end' : 'justify-start'
-            }`}
-          >
+          <div className={`flex max-w-[75%] ${
+            message.role === 'user' ? 'justify-end' : 'justify-start'
+          }`}>
             <div
-              className={`rounded-2xl px-3 py-2 md:px-4 md:py-2.5 text-sm md:text-base 
+              className={`rounded-lg px-4 py-2.5 text-base break-words
                 ${message.role === 'user'
                   ? 'bg-blue-500 text-white'
                   : 'backdrop-blur bg-white/10'
                 }
-                shadow-sm transition-colors
-                break-words
+                shadow-sm
               `}
             >
               {message.content}
@@ -119,16 +116,15 @@ export default function MessageList({ messages }: MessageListProps) {
           </div>
 
           {message.role === 'user' && (
-            <div className="w-6 h-6 md:w-8 md:h-8 shrink-0 rounded-full flex items-center justify-center bg-emerald-500/80 backdrop-blur">
-              <User className="w-4 h-4 md:w-5 md:h-5 text-white" />
+            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-emerald-500/80 backdrop-blur shrink-0">
+              <User className="w-5 h-5 text-white" />
             </div>
           )}
         </div>
       ))}
       
-      {/* 底部留白和滾動錨點 */}
+      {/* 底部留白 */}
       <div className="h-4" />
-      <div ref={bottomRef} className="h-px" />
     </div>
   );
 }
