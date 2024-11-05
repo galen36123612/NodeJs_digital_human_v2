@@ -27,7 +27,7 @@
 //}
 
 
-//Modify from this line 1105_v2 新增訊息上下滾動功能
+//Modify from this line 1105_v3 新增訊息上下滾動功能
 
 import { Message } from "ai/react";
 import { useEffect, useRef, useState } from "react";
@@ -41,7 +41,6 @@ export default function MessageList({ messages }: MessageListProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const [autoScroll, setAutoScroll] = useState(true);
 
-  // 平滑滾動到底部
   const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
     if (containerRef.current) {
       containerRef.current.scrollTo({
@@ -51,24 +50,20 @@ export default function MessageList({ messages }: MessageListProps) {
     }
   };
 
-  // 監聽滾動事件，決定是否要自動滾動
   const handleScroll = () => {
     if (!containerRef.current) return;
     
     const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-    // 如果用戶滾動到底部附近（允許 30px 的誤差），啟用自動滾動
     const isNearBottom = scrollHeight - scrollTop - clientHeight < 30;
     setAutoScroll(isNearBottom);
   };
 
-  // 當新消息到達時，如果啟用了自動滾動，則滾動到底部
   useEffect(() => {
     if (autoScroll) {
       scrollToBottom();
     }
   }, [messages, autoScroll]);
 
-  // 組件初始化時滾動到底部
   useEffect(() => {
     scrollToBottom('auto');
   }, []);
@@ -77,19 +72,17 @@ export default function MessageList({ messages }: MessageListProps) {
     <div 
       ref={containerRef}
       onScroll={handleScroll}
-      className="w-full h-[600px] flex flex-col gap-3 overflow-y-auto px-4 scroll-smooth"
+      className="flex-1 min-h-[300px] max-h-[80vh] flex flex-col gap-3 overflow-y-auto overscroll-none px-4"
       style={{
         scrollbarWidth: 'thin',
         scrollbarColor: '#4B5563 transparent',
+        WebkitOverflowScrolling: 'touch', // 為 iOS 提供平滑滾動
       }}
     >
-      {/* 頂部留白 */}
-      <div className="h-4" />
-      
       {messages.map((message: Message) => (
         <div 
           key={message.id} 
-          className={`flex gap-3 items-start animate-fade-in ${
+          className={`flex gap-3 items-start my-2 ${
             message.role === 'user' ? 'justify-end' : 'justify-start'
           }`}
         >
@@ -99,16 +92,15 @@ export default function MessageList({ messages }: MessageListProps) {
             </div>
           )}
           
-          <div className={`flex max-w-[75%] ${
+          <div className={`flex max-w-[80%] ${
             message.role === 'user' ? 'justify-end' : 'justify-start'
           }`}>
             <div
-              className={`rounded-lg px-4 py-2.5 text-base break-words
+              className={`rounded-2xl px-4 py-3 text-base whitespace-pre-wrap break-words
                 ${message.role === 'user'
                   ? 'bg-blue-500 text-white'
-                  : 'backdrop-blur bg-white/10'
+                  : 'bg-gray-100 dark:bg-gray-800'
                 }
-                shadow-sm
               `}
             >
               {message.content}
@@ -122,10 +114,6 @@ export default function MessageList({ messages }: MessageListProps) {
           )}
         </div>
       ))}
-      
-      {/* 底部留白 */}
-      <div className="h-4" />
     </div>
   );
 }
-
