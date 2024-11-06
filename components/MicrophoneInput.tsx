@@ -733,7 +733,7 @@ interface MicrophoneInputProps {
   onSubmit?: (content: string) => void;
   onStopPlay?: () => void;
   onStatusChange?: (status: MicrophoneStatus) => void;
-  delayBeforeSubmit?: number; // Time in milliseconds to wait before submitting
+  transcriptDisplayTime?: number; // New prop for controlling how long to show transcript
 }
 
 const checkSpeechRecognitionSupport = () => {
@@ -758,10 +758,10 @@ export default function MicrophoneInput({
   onSubmit,
   onStopPlay,
   onStatusChange,
-  delayBeforeSubmit = 2000 // Default 2 second delay
+  transcriptDisplayTime = 5000 // Default 5 seconds to display transcript
 }: MicrophoneInputProps) {
   const recognition = useRef<any>();
-  const submitTimeout = useRef<NodeJS.Timeout>();
+  const transcriptTimeout = useRef<NodeJS.Timeout>();
   const [play, setPlay] = useState<boolean>(false);
   const [isSupported, setIsSupported] = useState<boolean>(true);
   const [errorMessage, setErrorMessage] = useState<string>("");
@@ -781,26 +781,30 @@ export default function MicrophoneInput({
       if (recognition.current) {
         recognition.current.stop();
       }
-      if (submitTimeout.current) {
-        clearTimeout(submitTimeout.current);
+      if (transcriptTimeout.current) {
+        clearTimeout(transcriptTimeout.current);
       }
     };
   }, []);
 
-  const handleSubmitWithDelay = (transcript: string) => {
+  const handleTranscriptComplete = (transcript: string) => {
     setShowingTranscript(true);
     
-    // Clear any existing timeout
-    if (submitTimeout.current) {
-      clearTimeout(submitTimeout.current);
+    // Immediately submit the transcript
+    if (transcript.trim()) {
+      onSubmit?.(transcript);
     }
     
-    // Set new timeout for delayed submission
-    submitTimeout.current = setTimeout(() => {
-      onSubmit?.(transcript);
+    // Clear any existing timeout
+    if (transcriptTimeout.current) {
+      clearTimeout(transcriptTimeout.current);
+    }
+    
+    // Set new timeout for clearing the transcript display
+    transcriptTimeout.current = setTimeout(() => {
       setShowingTranscript(false);
       setCurrentTranscript("");
-    }, delayBeforeSubmit);
+    }, transcriptDisplayTime);
   };
 
   const handlerStop = () => {
@@ -810,7 +814,7 @@ export default function MicrophoneInput({
     setPlay(false);
     
     if (currentTranscript) {
-      handleSubmitWithDelay(currentTranscript);
+      handleTranscriptComplete(currentTranscript);
     }
     
     onStopPlay?.();
@@ -853,6 +857,11 @@ export default function MicrophoneInput({
           const transcript = item[0].transcript;
           setCurrentTranscript(transcript);
           contentChange?.(transcript);
+          
+          // If this is a final result, handle it
+          if (item.isFinal) {
+            handleTranscriptComplete(transcript);
+          }
         }
       };
 
