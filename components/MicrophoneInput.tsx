@@ -491,7 +491,7 @@ declare global {
 */
 
 /* MODIFY from this line 1105 user can stop the record anytime*/
-import { useRef, useState, useEffect } from "react";
+/*import { useRef, useState, useEffect } from "react";
 import Wave from "./Wave";
 import { Microphone, StopCircle } from "@phosphor-icons/react";
 
@@ -703,6 +703,235 @@ export default function MicrophoneInput({
 }
 
 // 為了 TypeScript 支持
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+    mozSpeechRecognition: any;
+    msSpeechRecognition: any;
+  }
+}*/
+
+/* 1106 Android + keep 2s + send straight */
+
+
+import { useRef, useState, useEffect } from "react";
+import Wave from "./Wave";
+import { Microphone, StopCircle } from "lucide-react";
+
+export enum MicrophoneStatus {
+  Listening,
+  StopListening,
+  NotSupported,
+  NoPermission,
+  Error
+}
+
+interface MicrophoneInputProps {
+  talking: boolean;
+  contentChange?: (content: string) => void;
+  onSubmit?: (content: string) => void;
+  onStopPlay?: () => void;
+  onStatusChange?: (status: MicrophoneStatus) => void;
+  delayBeforeSubmit?: number; // Time in milliseconds to wait before submitting
+}
+
+const checkSpeechRecognitionSupport = () => {
+  return !!(
+    window.SpeechRecognition ||
+    window.webkitSpeechRecognition ||
+    window.mozSpeechRecognition ||
+    window.msSpeechRecognition
+  );
+};
+
+const getSpeechRecognition = () => {
+  return window.SpeechRecognition ||
+    window.webkitSpeechRecognition ||
+    window.mozSpeechRecognition ||
+    window.msSpeechRecognition;
+};
+
+export default function MicrophoneInput({
+  talking = false,
+  contentChange,
+  onSubmit,
+  onStopPlay,
+  onStatusChange,
+  delayBeforeSubmit = 2000 // Default 2 second delay
+}: MicrophoneInputProps) {
+  const recognition = useRef<any>();
+  const submitTimeout = useRef<NodeJS.Timeout>();
+  const [play, setPlay] = useState<boolean>(false);
+  const [isSupported, setIsSupported] = useState<boolean>(true);
+  const [errorMessage, setErrorMessage] = useState<string>("");
+  const [currentTranscript, setCurrentTranscript] = useState<string>("");
+  const [showingTranscript, setShowingTranscript] = useState<boolean>(false);
+
+  useEffect(() => {
+    const supported = checkSpeechRecognitionSupport();
+    setIsSupported(supported);
+    if (!supported) {
+      setErrorMessage("您的瀏覽器不支持語音識別功能");
+      onStatusChange?.(MicrophoneStatus.NotSupported);
+    }
+
+    // Clean up on unmount
+    return () => {
+      if (recognition.current) {
+        recognition.current.stop();
+      }
+      if (submitTimeout.current) {
+        clearTimeout(submitTimeout.current);
+      }
+    };
+  }, []);
+
+  const handleSubmitWithDelay = (transcript: string) => {
+    setShowingTranscript(true);
+    
+    // Clear any existing timeout
+    if (submitTimeout.current) {
+      clearTimeout(submitTimeout.current);
+    }
+    
+    // Set new timeout for delayed submission
+    submitTimeout.current = setTimeout(() => {
+      onSubmit?.(transcript);
+      setShowingTranscript(false);
+      setCurrentTranscript("");
+    }, delayBeforeSubmit);
+  };
+
+  const handlerStop = () => {
+    if (recognition.current) {
+      recognition.current.stop();
+    }
+    setPlay(false);
+    
+    if (currentTranscript) {
+      handleSubmitWithDelay(currentTranscript);
+    }
+    
+    onStopPlay?.();
+  };
+
+  const startPlay = async () => {
+    if (play) {
+      handlerStop();
+      return;
+    }
+    
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      stream.getTracks().forEach(track => track.stop());
+    } catch (err) {
+      setErrorMessage("無法訪問麥克風，請檢查權限設置");
+      onStatusChange?.(MicrophoneStatus.NoPermission);
+      return;
+    }
+
+    const SpeechRecognition = getSpeechRecognition();
+    if (!SpeechRecognition) {
+      setErrorMessage("您的瀏覽器不支持語音識別功能");
+      onStatusChange?.(MicrophoneStatus.NotSupported);
+      return;
+    }
+
+    try {
+      recognition.current = new SpeechRecognition();
+      recognition.current.continuous = true;
+      recognition.current.lang = "zh-TW";
+      recognition.current.interimResults = true;
+      recognition.current.maxAlternatives = 1;
+
+      recognition.current.onresult = function (event: any) {
+        const results = event.results;
+        const item = results[results.length - 1];
+        
+        if (item) {
+          const transcript = item[0].transcript;
+          setCurrentTranscript(transcript);
+          contentChange?.(transcript);
+        }
+      };
+
+      recognition.current.onstart = function () {
+        setPlay(true);
+        onStatusChange?.(MicrophoneStatus.Listening);
+      };
+
+      recognition.current.onend = function () {
+        setPlay(false);
+        onStatusChange?.(MicrophoneStatus.StopListening);
+      };
+
+      recognition.current.onerror = function (event: any) {
+        setErrorMessage(getErrorMessage(event.error));
+        onStatusChange?.(MicrophoneStatus.Error);
+        setPlay(false);
+      };
+
+      recognition.current.start();
+    } catch (err) {
+      setErrorMessage("語音識別初始化失敗");
+      onStatusChange?.(MicrophoneStatus.Error);
+    }
+  };
+
+  const getErrorMessage = (error: string) => {
+    switch (error) {
+      case 'network':
+        return '網絡錯誤';
+      case 'no-speech':
+        return '沒有檢測到語音';
+      case 'aborted':
+        return '錄音被中止';
+      case 'audio-capture':
+        return '無法捕獲音頻';
+      case 'not-allowed':
+        return '麥克風權限被拒絕';
+      default:
+        return '發生未知錯誤';
+    }
+  };
+
+  return (
+    <div className="w-full relative">
+      {showingTranscript && currentTranscript && (
+        <div className="absolute -top-16 left-0 w-full text-center bg-black/50 p-2 rounded text-white">
+          {currentTranscript}
+        </div>
+      )}
+      <button
+        className={`w-full p-1 flex flex-row justify-center items-center gap-4 overflow-hidden color-inherit subpixel-antialiased rounded-md backdrop-blur backdrop-saturate-150 ${
+          isSupported ? 'bg-default-100 bg-background/10' : 'bg-gray-500'
+        }`}
+        onClick={startPlay}
+        disabled={!isSupported || talking}
+      >
+        {play ? (
+          <StopCircle 
+            size={28}
+            className="text-red-500"
+          />
+        ) : (
+          <Microphone 
+            size={28}
+            className={isSupported ? "text-white" : "text-gray-600"}
+          />
+        )}
+        <Wave play={play} />
+      </button>
+      {errorMessage && (
+        <div className="absolute top-full left-0 w-full mt-1 text-sm text-red-500 text-center">
+          {errorMessage}
+        </div>
+      )}
+    </div>
+  );
+}
+
 declare global {
   interface Window {
     SpeechRecognition: any;
