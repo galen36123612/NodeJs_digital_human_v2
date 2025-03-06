@@ -14,11 +14,14 @@ import MessageList from "./MessageList";
 import MicrophoneInput, { MicrophoneStatus } from "./MicrophoneInput";
 import { PauseCircle } from "@phosphor-icons/react/dist/ssr";
 
-const avatarId = "cfbdfe9fd9de4307b81719fcbc6084c0"
+const avatarId = "ed51e110ff96491c8595cf9c9c3f6d61"
 //const avatarId = "60439e8c0fe7428bb9b6c41772258a6b"; //'Angela-insuit-20220820';
 //const avatarId = "52f3786c8c9543248a5cfcddad53813a"
-const voiceId = "dbb805f1b63a40ec869c66819ade215e";
-
+// ed51e110ff96491c8595cf9c9c3f6d61 Amanda
+// cfbdfe9fd9de4307b81719fcbc6084c0
+const voiceId = "118e0e91a87a4e60a1353a438b3601ac";
+// 118e0e91a87a4e60a1353a438b3601ac 香港話
+// dbb805f1b63a40ec869c66819ade215e 中文
 export default function InteractiveAvatar() {
   const [isLoadingSession, setIsLoadingSession] = useState(false);
   const [isLoadingRepeat, setIsLoadingRepeat] = useState(false);
