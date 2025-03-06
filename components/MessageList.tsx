@@ -247,162 +247,59 @@ export default function MessageList({ messages }: MessageListProps) {
 
 import { Message } from "ai/react";
 import { useEffect, useRef, useState } from "react";
-import { User, Bot } from "lucide-react";
 
 interface MessageListProps {
   messages: Message[];
 }
 
 export default function MessageList({ messages }: MessageListProps) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [autoScroll, setAutoScroll] = useState(true);
-  const [processedMessages, setProcessedMessages] = useState<Message[]>([]);
-  const [isScrolling, setIsScrolling] = useState(false);
-  const scrollTimeout = useRef<NodeJS.Timeout>();
+  const view = useRef<HTMLDivElement>(null);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
-  // 處理重複訊息的函數
-  const removeDuplicateMessages = (msgs: Message[]) => {
-    const DUPLICATE_THRESHOLD = 1000;
-    
-    return msgs.filter((message, index) => {
-      if (index === 0) return true;
-      
-      const prevMessage = msgs[index - 1];
-      const isSameContent = message.content === prevMessage.content;
-      const isSameRole = message.role === prevMessage.role;
-      const timeDiff = new Date(message.id).getTime() - new Date(prevMessage.id).getTime();
-      
-      return !(isSameContent && isSameRole && timeDiff < DUPLICATE_THRESHOLD);
-    });
-  };
-
-  // 處理訊息
   useEffect(() => {
-    const filtered = removeDuplicateMessages(messages);
-    setProcessedMessages(filtered);
+    view.current?.scrollIntoView(false);
   }, [messages]);
 
-  // 滾動到底部的函數
-  const scrollToBottom = (behavior: ScrollBehavior = 'smooth') => {
-    if (containerRef.current) {
-      containerRef.current.scrollTo({
-        top: containerRef.current.scrollHeight,
-        behavior
+  const handleCopy = (content: string, id: string) => {
+    navigator.clipboard.writeText(content)
+      .then(() => {
+        setCopiedId(id);
+        // Reset the copied state after 2 seconds
+        setTimeout(() => setCopiedId(null), 2000);
+      })
+      .catch(err => {
+        console.error('Failed to copy text: ', err);
       });
-    }
   };
-
-  // 處理滾動事件
-  const handleScroll = () => {
-    if (!containerRef.current) return;
-    
-    // 清除之前的 timeout
-    if (scrollTimeout.current) {
-      clearTimeout(scrollTimeout.current);
-    }
-
-    setIsScrolling(true);
-    
-    const { scrollTop, scrollHeight, clientHeight } = containerRef.current;
-    const isNearBottom = scrollHeight - scrollTop - clientHeight < 30;
-    setAutoScroll(isNearBottom);
-
-    // 設置新的 timeout 來處理滾動結束
-    scrollTimeout.current = setTimeout(() => {
-      setIsScrolling(false);
-    }, 150);
-  };
-
-  // 自動滾動效果
-  useEffect(() => {
-    if (autoScroll) {
-      scrollToBottom();
-    }
-  }, [processedMessages, autoScroll]);
-
-  // 初始滾動
-  useEffect(() => {
-    scrollToBottom('auto');
-    return () => {
-      if (scrollTimeout.current) {
-        clearTimeout(scrollTimeout.current);
-      }
-    };
-  }, []);
 
   return (
-    <div 
-      ref={containerRef}
-      onScroll={handleScroll}
-      className="flex-1 min-h-[300px] max-h-[80vh] flex flex-col gap-3 overflow-y-auto overscroll-none px-4 scroll-smooth"
-      style={{
-        scrollbarWidth: 'thin',
-        scrollbarColor: '#4B5563 transparent',
-        WebkitOverflowScrolling: 'touch',
-        touchAction: 'pan-y',
-        position: 'relative',
-        msOverflowStyle: '-ms-autohiding-scrollbar'
-      }}
-    >
-      {/* 滾動指示器 */}
-      {!autoScroll && !isScrolling && (
-        <button
-          onClick={() => {
-            scrollToBottom();
-            setAutoScroll(true);
-          }}
-          className="fixed bottom-4 right-4 bg-blue-500 text-white rounded-full p-2 shadow-lg hover:bg-blue-600 transition-all z-10"
-          aria-label="Scroll to bottom"
-        >
-          <svg
-            className="w-5 h-5"
-            fill="none"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="2"
-            viewBox="0 0 24 24"
-            stroke="currentColor"
-          >
-            <path d="M19 14l-7 7m0 0l-7-7m7 7V3"></path>
-          </svg>
-        </button>
-      )}
-
-      {processedMessages.map((message: Message) => (
-        <div 
-          key={message.id} 
-          className={`flex gap-3 items-start my-2 ${
-            message.role === 'user' ? 'justify-end' : 'justify-start'
-          }`}
-        >
-          {message.role === 'assistant' && (
-            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-blue-500/80 backdrop-blur shrink-0">
-              <Bot className="w-5 h-5 text-white" />
-            </div>
-          )}
-          
-          <div 
-            className={`flex max-w-[80%] ${
-              message.role === 'user' ? 'justify-end' : 'justify-start'
-            }`}
-          >
-            <div
-              className={`rounded-2xl px-4 py-3 text-base whitespace-pre-wrap break-words
-                ${message.role === 'user'
-                  ? 'bg-blue-500 text-white'
-                  : 'bg-gray-100 dark:bg-gray-800'
-                }
-              `}
+    <div ref={view} className="w-full border-none flex flex-col gap-1">
+      {messages.map((message: Message) => (
+        <div key={message.id} className="flex flex-col relative group">
+          <span className="flex-1 backdrop-blur-sm bg-white/10 rounded-md text-lg p-1 pb-8">
+            {message.content}
+          </span>
+          <div className="absolute bottom-2 right-2 flex justify-end">
+            <button
+              onClick={() => handleCopy(message.content, message.id)}
+              className="p-1 rounded-md opacity-0 group-hover:opacity-100 transition-opacity bg-gray-100 hover:bg-gray-200"
+              aria-label="Copy message"
+              title="Copy message"
             >
-              {message.content}
-            </div>
+              {copiedId === message.id ? (
+                // Check icon
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-green-500">
+                  <polyline points="20 6 9 17 4 12"></polyline>
+                </svg>
+              ) : (
+                // Copy icon
+                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                </svg>
+              )}
+            </button>
           </div>
-
-          {message.role === 'user' && (
-            <div className="w-8 h-8 rounded-full flex items-center justify-center bg-emerald-500/80 backdrop-blur shrink-0">
-              <User className="w-5 h-5 text-white" />
-            </div>
-          )}
         </div>
       ))}
     </div>
